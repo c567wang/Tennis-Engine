@@ -5,7 +5,6 @@ Contains classes Court, UniformGrid
 import numpy as np
 from scipy.interpolate import interp1d
 from math import ceil
-from settings import ShotSettings as ss
 
 class Court():
     """
@@ -37,7 +36,7 @@ class UniformGrid():
     takes the interpolated parabola's tile midpoint value
     """
     
-    def __init__(self, court, tile_dim):
+    def __init__(self, court, tile_dim, court_settings):
         # public attributes: grid; net_vec; std_dis
         #   state (0 - serve, 1 - rally, 2 - custom, grid kept as public,
         #   but best to use method when manually changing values, which
@@ -153,7 +152,7 @@ class UniformGrid():
         # distance (in tiles) of a player and where they hit the ball
         # included here since once the distance is fixed in meters,
         # this is a property of the grid
-        self.std_dis = ceil(ss.std_dis/tile_dim.width-0.5)
+        self.std_dis = ceil(court_settings.std_dis/tile_dim.width-0.5)
     
     def set_serve_state(self) -> None:
         # sets grid to serve state

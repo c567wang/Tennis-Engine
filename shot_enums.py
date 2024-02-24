@@ -1,15 +1,16 @@
 from enum import Enum, IntEnum
 
 class Hand(Enum):
-    FOREHAND = 1
-    BACKHAND = 2
-    CENTERED = 3 # tweener or overheads (both forehand and backhand)
+    FOREHAND = 0
+    BACKHAND = 1
+    CENTERED = 2 # tweener or overheads (both forehand and backhand)
     
-class Spin(Enum):
-    FLAT = 1
-    TOPSPIN = 2
-    BACKSPIN = 3
-    SIDESPIN = 4
+class Spin(IntEnum):
+    FLAT = 0
+    TOPSPIN = 1
+    BACKSPIN = 2
+    SIDESPIN_LEFT = 3
+    SIDESPIN_RIGHT = 4
     
 class Window(IntEnum):
     EV = 0 # early volley

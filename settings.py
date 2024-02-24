@@ -40,26 +40,47 @@ class CourtSettings():
         # 0.7 for slow courts like clay, 0.7 otherwise
         self.cof = 0.7
         
-class ShotSettings():
-    """
-    metrics and adjustable attributes for various shots
-    """
-    
-    def __init__(self):
-        # standard distance between player and ball upon impact
+        # standard distance between player and ball upon impact in meters
         # not taking into account hand used
         self.std_dis = 1
         
+class ShotSettings():
+    """
+    metrics and adjustable attributes for various shots
+    shot ranges (static & running) are hardcoded directly in shots.py
+    """
+    
+    def __init__(self):
+        
+        # pre-bounce pace (pace)
+        # forehand flat ground stroke
+        self.pace_fhfgs = 31.9 # WEB ARTICLES
+        # backhand drop volley
+        self.pace_bhdv = 5 # NOT SOURCED
+        
         # setup times (settim)
-        # forehand ground stroke
-        self.settim_fhgs = 0.5 # EXAMPLE - NOT SOURCED
+        # forehand flat ground stroke
+        self.settim_fhfgs = 0.5 # NOT SOURCED
+        # backhand drop volley
+        self.settim_bhdv = 0.3 # NOT SOURCED
         
         # shot risk/difficulty/control/accuracy (between 0 and 1)
         # forehand flat ground stroke
-        self.risk_fhfgs = 3 # EXAMPLE - NOT SOURCED
+        self.risk_fhfgs = 0.5 # NOT SOURCED
+        # backhand drop volley
+        self.risk_bhdv = 0.6 # NOT SOURCED
         
         # shot running penalty (rp, between 0 and 1)
-        self.rp_fhfgs = 0.3 # example
+        # forehand flat ground stroke
+        self.rp_fhfgs = 0.3 # NOT SOURCED
+        # backhand drop volley
+        self.rp_bhdv = 0.5 # NOT SOURCED
+        
+        # minimum net distance (in terms of tiles) (mnd)
+        # forehand flat ground stroke
+        self.mnd_fhfgs = 1 # NOT SOURCED
+        # backhand drop volley
+        self.mnd_bhdv = 0 # STANDARD ASSUMPTION
         
 class PlayerSettings():
     """
@@ -69,3 +90,4 @@ class PlayerSettings():
     def __init__(self):
         self.reaction_time = 0.15 # seconds
         self.halting_time = 0.15 # seconds
+        self.speed = 4 # m/s, sourced but need to revisit
