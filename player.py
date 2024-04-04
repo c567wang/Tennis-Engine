@@ -1,4 +1,5 @@
 from player_enums import DominantHand as DH
+from functions import movement_at_t
 
 class Player():
     
@@ -41,3 +42,6 @@ class Player():
     def update_shots(self):
         # call everytime after manual tinkering with left/middle/right_shots
         self.shots = [self.left_shots,self.middle_shots,self.right_shots]
+        
+    def react(self, t):
+        self.pos = movement_at_t(t, self.speed, self.pos, self.destination)

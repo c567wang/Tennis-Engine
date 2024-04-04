@@ -3,8 +3,8 @@ import operator
 import numpy as np
 
 # functions arranged alphabetically
-# passed/TODO: flip_court_perspective, determine_windows, net_risk, risk_aggr,
-#               left_handed_ranges
+# passed/TODO: net_risk, risk_aggr, left_handed_ranges
+# needs refining: determine_windows
 
 def coord_shift(coord,direction,d):
     """
@@ -22,17 +22,64 @@ def coord_shift(coord,direction,d):
     else:
         return coord
     
-def determine_windows(shot, impact, anchor):
+def determine_windows(shot, impact, anchor, cs):
     """
     Makes use of shot's spin and pre-bounce speed to calculate shot trajectory
     given the coordinates for impact and anchor. The window coordinates
     and their arrival times are then extracted and return in a dict
+    cs is court settings in settings.py where cof/cor/tdr are found
     Output format: {window:Window: np.array([(x:int,y:int),time:float])}
     Sample output: {Window.V: np.array([(15,10),1.05]),
                     Window.GS: np.array([(7,11),3])}
     Invalid windows, often EV and sometimes V, are simply excluded
     """
-    pass
+    # incredibly simplistic version not factoring in spin for testing purposes
+    # translate pre-bounce speed into tiles, take 30% off post bounce 
+    # in same direction and windows to be roughly half way points
+    
+    ret = {}
+    direc = tuple(map(operator.sub,anchor,impact))
+    
+    # EV - early volley
+    direc_ev = tuple(round(i/5) for i in direc)
+    ev = tuple(map(operator.add,impact,direc_ev))
+    if ev[0] < 18:
+        dist = math.sqrt(direc_ev[0]**2+direc_ev[1]**2)
+        t = dist/shot.pre_bounce_pace
+        ret[0] = np.array([ev,t])
+    
+    # V - volley
+    direc_v = tuple(round(4*i/5) for i in direc)
+    v = tuple(map(operator.add,impact,direc_v))
+    if v[0] < 18:
+        dist = math.sqrt(direc_v[0]**2+direc_v[1]**2)
+        t = dist/shot.pre_bounce_pace
+        ret[1] = np.array([v,t])    
+    
+    # post-bounce ball: 1) accumulates topspin (tdr applied
+    #                       and windows taken closer to center of trajectory)
+    #                   2) horizontal speed decreases (by factor cof)
+    #                   3) vertical speed decreases (distance reduced by
+    #                       COF*sqrt(COR) relative to direc)
+    reduce_direc = cs.cof*math.sqrt(cs.cor)*cs.tdr
+    dist_pre = math.sqrt(direc[0]**2+direc[1]**2)
+    t_pre = dist_pre/shot.pre_bounce_pace
+    
+    # HV - half volley
+    direc_hv = tuple(round(reduce_direc*i/3) for i in direc)
+    hv = tuple(map(operator.add,anchor,direc_hv))
+    dist = math.sqrt(direc_hv[0]**2+direc_hv[1]**2)
+    t = dist/(cs.cof*shot.pre_bounce_pace) + t_pre
+    ret[2] = np.array([hv,t])
+    
+    # GS - ground stroke
+    direc_gs = tuple(round(reduce_direc*i*3/5) for i in direc)
+    gs = tuple(map(operator.add,anchor,direc_gs))
+    dist = math.sqrt(direc_gs[0]**2+direc_gs[1]**2)
+    t = dist/(cs.cof*shot.pre_bounce_pace) + t_pre
+    ret[3] = np.array([gs,t])
+    
+    return(ret)
     
 def distance_between(pt1, pt2):
     """
@@ -40,20 +87,54 @@ def distance_between(pt1, pt2):
     """
     return math.sqrt((pt1[0]-pt2[0])**2+(pt1[1]-pt2[1])**2)
 
-def flip_court_perspective():
-    pass
+def flip_coordinates(coord):
+    """
+    Helper for flip_court_perspective below
+    Does flipping for only one coordinate, hardcoded
+    """
+    
+    return tuple(map(operator.sub,(35,17),coord))
+
+def flip_players(p1,p2):
+    """
+    Flips the direction the program sees the entire court (including players)
+    so get_valid_moves etc. only have to calculate for player residing on
+    the lower half of the court after this function is called
+    Items flipped: Player positions, destinations
+    """
+    
+    p1.pos = flip_coordinates(p1.pos)
+    p1.destination = flip_coordinates(p1.destination)
+    p2.pos = flip_coordinates(p2.pos)
+    p2.destination = flip_coordinates(p2.destination)
+        
+def flip_windows(windows):
+    """
+    Flips the coordinates of the windows so that where before they were going
+    from the bottom court to the top court, now they are going from the top
+    court to the bottom court, and further evaluation get_valid_moves can
+    be called with these windows
+    
+    windows: one single Dict of windows with at most four elements (EV,V,HV,GS)
+    """
+    
+    for window in windows.keys():
+        windows[window][0] = flip_coordinates(windows[window][0])
 
 def get_valid_moves(player,opponent,windows,grid):
     """
     Returns list of moves, a move is a list in the following order
-    [shot type, shot anchor coordinates, new destination coordinates]
+    
+    a dict with the following keys:
+        {"shot type","shot impact","shot anchor","new pos","new dest"}
     player, opponent: Player
     windows: Dict with shot trajectory information
     grid: UniformGrid
     
-    Note updating opponent's position after player reacts is done 
-    here for convenience even though it doesn't directly affect
-    move generation
+    Important: The function does not mutate any player or window
+    It takes into account the player's reaction time wrt the windows,
+    but BOTH PLAYER AND OPPONENT'S POS/DESTINATION NEED TO BE UPDATED MANUALLY
+    BY THE PROGRAM CALLING THIS FUNCTION
     """
     
     # function is getting moves for player
@@ -62,19 +143,11 @@ def get_valid_moves(player,opponent,windows,grid):
     # function looks at court from perspective of B being in bottom-half
     
     # 1. What is the state of the game after B reacts?
+    # As mentioned in function description, this function no longer updates
+    # player positions. The program calling should do this!!!
+    reachable = np.zeros((4,3)) # explained in (2) below
     for window in windows.keys():
-        windows[window][1] -= player.reaction_time
-    # A moves
-    opponent.pos = movement_at_t(player.reaction_time,
-                                 opponent.speed,
-                                 opponent.pos,
-                                 opponent.destination)
-    # B continues moving if they were moving prior
-    player.pos = movement_at_t(player.reaction_time,
-                               player.speed,
-                               player.pos,
-                               player.destination)
-    
+        reachable[window,1] = windows[window][1] - player.reaction_time
     
     # 2. For a given window, can B get there in time?
     # results returned in 4x3 matrix
@@ -86,7 +159,6 @@ def get_valid_moves(player,opponent,windows,grid):
     # as noted in Player.py, direction (left/middle/right) refers to
     # player position relative to impact tile
     # e.g. bottom-court right-handed forehand is left
-    reachable = np.zeros((4,3))
     for window in windows.keys():
         # window is type IntEnum so used as index here
         # window position is windows[window][0]
@@ -96,9 +168,11 @@ def get_valid_moves(player,opponent,windows,grid):
         t_left = time_to_pt(player,left)
         t_middle = time_to_pt(player,middle)
         t_right = time_to_pt(player,right)
-        reachable[window,0] = windows[window][1] - t_left
-        reachable[window,1] = windows[window][1] - t_middle
-        reachable[window,2] = windows[window][1] - t_right
+        reachable[window,0] = reachable[window,1] - t_left
+        reachable[window,1] = reachable[window,1] - t_middle
+        reachable[window,2] = reachable[window,1] - t_right
+        
+    print(reachable)
             
     # 3. Which shots does the remaining set-up time allow? 
     #    and in what state would the player be hitting
@@ -156,7 +230,11 @@ def get_valid_moves(player,opponent,windows,grid):
                 continue
         for anchor in anchors:
             for dest in new_dest:
-                moves.append([shot,anchor,dest])
+                moves.append({"shot type":shot,
+                              "shot impact":window,
+                              "shot anchor":anchor,
+                              "new pos":p_pos,
+                              "new dest":dest})
     return moves
 
 def left_handed_ranges(shot_range):

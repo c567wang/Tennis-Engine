@@ -37,8 +37,26 @@ class CourtSettings():
     def __init__(self):
         # COF - coefficient of friction
         # usually 0.6 for fast courts like grass,
-        # 0.7 for slow courts like clay, 0.7 otherwise
+        # 0.8 for slow courts like clay, 0.7 otherwise
+        # using for percentage of horizontal speed retained
         self.cof = 0.7
+        
+        # COR - coefficient of restitution
+        # “The COR is reasonably constant for a given court, 
+        # regardless of the ball speed or the angle of incidence. 
+        # However, it can vary on an uneven or patchy surface like grass. 
+        # On grass courts, the ball doesn’t bounce as well, and the 
+        # COR is about 0.7, but it depends on which patch of grass the ball 
+        # hits and whether the grass is new or worn. Values of the COR as 
+        # high as 0.9 have been observed on some grass surfaces and also on 
+        # hard court surfaces, particularly at low angles of incidence.”
+        # - PTT
+        self.cor = 0.8
+        
+        # topspin distance reduction
+        # a ball with topspin will fly less further horizontally than it would
+        # have if it had no topspin, we approximate this with a scalar
+        self.tdr = 0.9
         
         # standard distance between player and ball upon impact in meters
         # not taking into account hand used
@@ -54,7 +72,7 @@ class ShotSettings():
         
         # pre-bounce pace (pace)
         # forehand flat ground stroke
-        self.pace_fhfgs = 31.9 # WEB ARTICLES
+        self.pace_fhfgs = 25 # 31.9 # WEB ARTICLES
         # backhand drop volley
         self.pace_bhdv = 5 # NOT SOURCED
         

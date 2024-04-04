@@ -17,7 +17,7 @@ from shots import *
 from shot_enums import Window as W
 from player import Player
 from player_enums import CourtHalf as CH
-from functions import get_valid_moves, flip_court_perspective
+from functions import get_valid_moves
 import numpy as np # why are the window values numpy arrays again?
 
 # court-grid initialization
@@ -52,6 +52,8 @@ p2.left_shots = [fhfgs]
 p2.right_shots = [bhdv]
 p2.update_shots()
 
-res = get_valid_moves(p2,p1,initial_windows,grid)
-
-
+# moves for p2
+# p1,p2 reacts to p1's move first
+p2.react(p2.reaction_time)
+p1.react(p2.reaction_time)
+res = get_valid_moves(p2,p1,initial_windows,grid) # test passed, microseconds

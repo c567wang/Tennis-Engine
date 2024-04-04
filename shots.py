@@ -56,6 +56,9 @@ class ForehandFlatGroundstroke(Shot):
         for i in range(5):
             for j in range(13):
                 self.static_range.append((-20+i,-7+j))
+        for i in range(3):
+            for j in range(4):
+                self.running_range.append((-18+i,1+j))
         
 class BackhandDropVolley(Shot):
     """
