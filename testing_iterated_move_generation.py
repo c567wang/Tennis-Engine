@@ -63,7 +63,7 @@ p2.update_shots()
 # p1,p2 reacts to p1's move first
 p2.react(p2.reaction_time)
 p1.react(p2.reaction_time)
-d1_moves = get_valid_moves(p2,p1,initial_windows,grid) # test passed, microseconds 
+d1_moves = get_valid_moves(p2,initial_windows,grid) # test passed, microseconds 
 
 ##### END OF COPY-PASTE #####
 
@@ -119,7 +119,7 @@ for move in d1_moves:
                             move["shot anchor"],
                             court_settings)
     flip_windows(windows)
-    d2_move = get_valid_moves(p1,p2,windows,grid)
+    d2_move = get_valid_moves(p1,windows,grid)
     if d2_move: 
         d2_moves.append(d2_move)
     else:

@@ -1,0 +1,78 @@
+---
+title: "Risk Regression"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Shot Paces
+
+```{r}
+# organized in order of shots in unique(dat$prev_shot)
+paces <- list(ftg=29,btg=28,ffg=32,bfg=31,fdv=4.5,bdv=4.5,
+              fl=17.5,bl=17.5,fs=12,bs=12,os=47,tw=17,
+              kserve=40,fserve=47,userve=22,tserve=42)
+# cor post-bounce pace reduction
+cor <- 0.8
+```
+
+## Dataset
+
+```{r}
+dat <- read.csv("../data/tennis_rally_risk_v1.csv",header=TRUE)
+```
+
+```{r}
+# fill in prev_shot_pace
+shots <- unique(dat$prev_shot)
+for (i in 1:nrow(dat)){
+  shot <- dat$prev_shot[i]
+  shot.idx <- which(shots==shot)
+  dat$prev_shot_pace[i] <- paces[[shot.idx]]
+  if (dat$window[i]=="GS" | dat$window[i]=="HV") {
+    dat$prev_shot_pace[i] <- dat$prev_shot_pace[i]*cor
+  }
+}
+```
+
+## Logistic Regression
+
+### Naive fit with all factors without interactions
+
+```{r}
+(fit1 <- glm(formula=error~tile+running+net+factor(window)+dir_change+factor(shot)+flat+prev_shot_pace+factor(prev_shot_spin),family="binomial",data=dat))
+```
+```{r}
+summary(fit1)
+```
+```{r}
+par(mfrow=c(1,2))
+plot(fit1$residuals)
+text(fit1$residuals)
+qqnorm(fit1$residuals)
+qqline(fit1$residuals,lty=2,lwd=2,col="red")
+```
+```{r}
+plot(fit1$fitted.values)
+text(fit1$fitted.values)
+abline(h=0.5,lty=2,lwd=2,col="red")
+```
+
+
+
+
+### Model with interested interactions one-by-one
+
+```{r}
+fit2 <- glm(formula=error~tile+running+net+factor(window)+dir_change+factor(shot)+flat+prev_shot_pace+factor(prev_shot_spin)+running*factor(shot),family="binomial",data=dat)
+# +running*factor(shot)
+# +prev_shot_pace*factor(shot)
+# +factor(prev_shot_spin)*factor(shot)
+# +factor(window)*factor(shot)
+# +dir_change*factor(shot)
+# +prev_shot_pace*factor(window)
+# +factor(prev_shot_spin)*factor(window)
+summary(fit2)
+```

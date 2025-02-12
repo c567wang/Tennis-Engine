@@ -3,8 +3,8 @@ import operator
 import numpy as np
 
 # functions arranged alphabetically
-# passed/TODO: net_risk, risk_aggr, left_handed_ranges
-# needs refining: determine_windows
+# passed/TODO: left_handed_ranges
+# needs refining: 
 
 def coord_shift(coord,direction,d):
     """
@@ -22,62 +22,79 @@ def coord_shift(coord,direction,d):
     else:
         return coord
     
-def determine_windows(shot, impact, anchor, cs):
+def determine_windows(shot, impact, anchor, cs, running=False):
     """
     Makes use of shot's spin and pre-bounce speed to calculate shot trajectory
     given the coordinates for impact and anchor. The window coordinates
     and their arrival times are then extracted and return in a dict
-    cs is court settings in settings.py where cof/cor/tdr are found
+    cs is court settings in settings.py where hsr,k,c_d are found
     Output format: {window:Window: np.array([(x:int,y:int),time:float])}
     Sample output: {Window.V: np.array([(15,10),1.05]),
                     Window.GS: np.array([(7,11),3])}
     Invalid windows, often EV and sometimes V, are simply excluded
+    !! Function is always working with impact in bottom half of court !!
     """
-    # incredibly simplistic version not factoring in spin for testing purposes
-    # translate pre-bounce speed into tiles, take 30% off post bounce 
-    # in same direction and windows to be roughly half way points
     
     ret = {}
     direc = tuple(map(operator.sub,anchor,impact))
     
     # EV - early volley
-    direc_ev = tuple(round(i/5) for i in direc)
+    direc_ev = tuple(round(i*shot.window_fractions[0]) for i in direc)
     ev = tuple(map(operator.add,impact,direc_ev))
     if ev[0] < 18:
         dist = math.sqrt(direc_ev[0]**2+direc_ev[1]**2)
-        t = dist/shot.pre_bounce_pace
+        if running:
+            t = time_to_x(cs.k,cs.c_d,shot.running_pace,dist)
+        else:
+            t = time_to_x(cs.k,cs.c_d,shot.pre_bounce_pace,dist)
         ret[0] = np.array([ev,t])
     
     # V - volley
-    direc_v = tuple(round(4*i/5) for i in direc)
+    direc_v = tuple(round(i*shot.window_fractions[1]) for i in direc)
     v = tuple(map(operator.add,impact,direc_v))
     if v[0] < 18:
         dist = math.sqrt(direc_v[0]**2+direc_v[1]**2)
-        t = dist/shot.pre_bounce_pace
+        if running:
+            t = time_to_x(cs.k,cs.c_d,shot.running_pace,dist)
+        else:
+            t = time_to_x(cs.k,cs.c_d,shot.pre_bounce_pace,dist)
         ret[1] = np.array([v,t])    
     
-    # post-bounce ball: 1) accumulates topspin (tdr applied
-    #                       and windows taken closer to center of trajectory)
-    #                   2) horizontal speed decreases (by factor cof)
-    #                   3) vertical speed decreases (distance reduced by
-    #                       COF*sqrt(COR) relative to direc)
-    reduce_direc = cs.cof*math.sqrt(cs.cor)*cs.tdr
+    # post-bounce ball: get time for pre_bounce, apply hsr
     dist_pre = math.sqrt(direc[0]**2+direc[1]**2)
-    t_pre = dist_pre/shot.pre_bounce_pace
+    t_pre = time_to_x(cs.k,cs.c_d,shot.pre_bounce_pace,dist_pre)
     
     # HV - half volley
-    direc_hv = tuple(round(reduce_direc*i/3) for i in direc)
+    direc_hv = tuple(round(i*shot.window_fractions[2]) for i in direc)
+    if (shot.spin==4): # kick serve
+        direc_hv = tuple(map(operator.add,direc_hv,(0,1))) # shift to right by 1
     hv = tuple(map(operator.add,anchor,direc_hv))
     dist = math.sqrt(direc_hv[0]**2+direc_hv[1]**2)
-    t = dist/(cs.cof*shot.pre_bounce_pace) + t_pre
+    if running:
+        t = time_to_x(cs.k,cs.c_d,cs.hsr*shot.running_pace,dist) + t_pre
+    else:
+        t = time_to_x(cs.k,cs.c_d,cs.hsr*shot.pre_bounce_pace,dist) + t_pre
     ret[2] = np.array([hv,t])
     
     # GS - ground stroke
-    direc_gs = tuple(round(reduce_direc*i*3/5) for i in direc)
+    direc_gs = tuple(round(i*shot.window_fractions[3]) for i in direc)
+    if (shot.spin==4): # kick serve
+        direc_gs = tuple(map(operator.add,direc_gs,(0,1))) # shift to right by 1
     gs = tuple(map(operator.add,anchor,direc_gs))
     dist = math.sqrt(direc_gs[0]**2+direc_gs[1]**2)
-    t = dist/(cs.cof*shot.pre_bounce_pace) + t_pre
+    if running:
+        t = time_to_x(cs.k,cs.c_d,cs.hsr*shot.running_pace,dist) + t_pre
+    else:
+        t = time_to_x(cs.k,cs.c_d,cs.hsr*shot.pre_bounce_pace,dist) + t_pre
     ret[3] = np.array([gs,t])
+    
+    # delete out of bound ranges
+    pop = []
+    for i in ret.keys():
+        if ret[i][0][0] < 0 or ret[i][0][1] < 0 or ret[i][0][0] > 35:
+            pop.append(i)
+    for i in pop:
+        ret.pop(i,None)
     
     return(ret)
     
@@ -95,7 +112,7 @@ def flip_coordinates(coord):
     
     return tuple(map(operator.sub,(35,17),coord))
 
-def flip_players(p1,p2):
+def flip_player(p):
     """
     Flips the direction the program sees the entire court (including players)
     so get_valid_moves etc. only have to calculate for player residing on
@@ -103,10 +120,8 @@ def flip_players(p1,p2):
     Items flipped: Player positions, destinations
     """
     
-    p1.pos = flip_coordinates(p1.pos)
-    p1.destination = flip_coordinates(p1.destination)
-    p2.pos = flip_coordinates(p2.pos)
-    p2.destination = flip_coordinates(p2.destination)
+    p.pos = flip_coordinates(p.pos)
+    p.destination = flip_coordinates(p.destination)
         
 def flip_windows(windows):
     """
@@ -121,19 +136,19 @@ def flip_windows(windows):
     for window in windows.keys():
         windows[window][0] = flip_coordinates(windows[window][0])
 
-def get_valid_moves(player,opponent,windows,grid):
+def get_valid_moves(player,windows,grid):
     """
     Returns list of moves, a move is a list in the following order
     
     a dict with the following keys:
-        {"shot type","shot impact","shot anchor","new pos","new dest"}
-    player, opponent: Player
+        {"shot type","shot impact","shot anchor","new pos","new dest","running"}
+    player: Player
     windows: Dict with shot trajectory information
     grid: UniformGrid
     
     Important: The function does not mutate any player or window
     It takes into account the player's reaction time wrt the windows,
-    but BOTH PLAYER AND OPPONENT'S POS/DESTINATION NEED TO BE UPDATED MANUALLY
+    BOTH PLAYER AND OPPONENT'S POS/DESTINATION NEED TO BE UPDATED MANUALLY
     BY THE PROGRAM CALLING THIS FUNCTION
     """
     
@@ -169,10 +184,10 @@ def get_valid_moves(player,opponent,windows,grid):
         t_middle = time_to_pt(player,middle)
         t_right = time_to_pt(player,right)
         reachable[window,0] = reachable[window,1] - t_left
-        reachable[window,1] = reachable[window,1] - t_middle
         reachable[window,2] = reachable[window,1] - t_right
-        
-    print(reachable)
+        reachable[window,1] = reachable[window,1] - t_middle
+    
+    # print(reachable)
             
     # 3. Which shots does the remaining set-up time allow? 
     #    and in what state would the player be hitting
@@ -196,7 +211,7 @@ def get_valid_moves(player,opponent,windows,grid):
             elif reachable[i,j]>0:
                 # will have to hit the shot while running
                 for shot in player.shots[j]:
-                    if shot.run_penalty<1 and \
+                    if shot.std_run_penalty<1 and \
                     reachable[i,j]>=shot.running_setup_time and \
                     i in shot.acc_windows:
                         choice = {"window":i,
@@ -234,14 +249,17 @@ def get_valid_moves(player,opponent,windows,grid):
                               "shot impact":window,
                               "shot anchor":anchor,
                               "new pos":p_pos,
-                              "new dest":dest})
+                              "new des":dest,
+                              "running":choice["running"],
+                              "window":choice["window"],
+                              "time elapsed":windows[choice["window"]][1]})
     return moves
 
 def left_handed_ranges(shot_range):
     """
     Takes list of relative coordinates shot_range and flips along the y-axis
     for use of left-handed players, as all the ranges are hardcoded for 
-    right-handers. Ideally used during initialization of model
+    right-handers. This function ideally used during initialization of model
     """
     pass
 
@@ -276,15 +294,12 @@ def movement_readjust_penalty(player,new_destination):
     if vec==(0,0): return 0
     new = tuple(map(operator.sub,new_destination,player.pos))
     # is getting cos too computationally expensive?
-    cos = (vec[0]*new[0]+vec[1]*new[1])/math.sqrt((vec[0]**2+vec[1]**2)*(new[0]**2+new[1]**2))
+    cos = (vec[0]*new[0]+vec[1]*new[1])/math.sqrt((vec[0]**2+vec[1]**2)+(new[0]**2+new[1]**2))
     if cos >= 0:
         return 0
     else:
         k = 0.16
-        return k*cos
-    
-def net_risk(start,anchor,grid):
-    pass
+        return -k*cos
 
 def new_destinations(player_pos):
     """
@@ -297,24 +312,114 @@ def new_destinations(player_pos):
     """
     
     l,w = player_pos
-    ret = []
-    ret.extend([(l,7),(l,8),(l,9),(l,10)])
+    ret = [player_pos,(l,7),(l,10)] # staying put, cheating to ad/deuce
     if w < 7:
         w0 = 7
     elif w > 10:
         w0 = 10
     else:
         w0 = w
-    ret.extend([(18,w0),(23,w0),(28,w0),(29,w0),(30,w0),(31,w0)])
-    ret = list(set(ret))
+    ret.extend([(19,w0),(29,w0),(32,w0)]) # moving to net/baseline/deep
+    ret = list(set(ret)) # get rid of duplicates
     return ret
     
-def risk_aggr():
+def risk_aggr(risk_settings,impact,anchor,shot_id,
+              par_spin,dir_change,running,window):
     """
     function aggregating all risk factors
     """
     
-    pass
+    risk = risk_settings.baseline
+    # tile risk
+    if anchor[0]==6:
+        if anchor[1]==4 or anchor[1]==13:
+            risk += risk_settings.tile_corner
+        else:
+            risk += risk_settings.tile_baseline
+    elif anchor[1]==4 or anchor[1]==13:
+        risk += risk_settings.tile_sideline
+    # add line below since only 0.115 of our 1x1 sideline tiles contain
+    # area that is "in", so their adjacent tiles also carry risk to a lesser degree
+    elif anchor[1]==5 or anchor[1]==12:
+        risk += risk_settings.tile_sideline*0.5
+    # net risk
+    if 6 < impact[1] < 11 and (anchor[1]<7 or anchor[1]>10):
+        risk += risk_settings.net
+    # previous shot spin (add if flat or backspin)
+    if par_spin==0:
+        risk += risk_settings.prev_f
+    elif par_spin==2:
+        risk += risk_settings.prev_b
+    # window risk
+    if window==0:
+        risk += risk_settings.window_ev
+    elif window==1:
+        risk += risk_settings.window_v
+    elif window==2:
+        risk += risk_settings.window_hv
+    # change-of-direction risk
+    if dir_change: risk += risk_settings.dir_change
+    # running risk
+    if running: risk += risk_settings.running
+    # shot risk & interaction term with running
+    if shot_id==1:
+        risk += risk_settings.fhtgs
+        if running: risk += risk_settings.rp_fhtgs
+    if shot_id==2:
+        risk += risk_settings.bhtgs
+        if running: risk += risk_settings.rp_bhtgs
+    if shot_id==3:
+        risk += risk_settings.fhfgs
+        if running: risk += risk_settings.rp_fhfgs
+    if shot_id==4:
+        risk += risk_settings.bhfgs
+        if running: risk += risk_settings.rp_bhfgs
+    if shot_id==5:
+        risk += risk_settings.fhdv
+        if running: risk += risk_settings.rp_fhdv
+    if shot_id==6:
+        risk += risk_settings.bhdv
+        if running: risk += risk_settings.rp_bhdv
+    if shot_id==7:
+        risk += risk_settings.fhlob
+        if running: risk += risk_settings.rp_fhlob
+    if shot_id==8:
+        risk += risk_settings.bhlob
+        if running: risk += risk_settings.rp_bhlob
+    if shot_id==9:
+        risk += risk_settings.fhsl
+        if running: risk += risk_settings.rp_fhsl
+    if shot_id==10:
+        risk += risk_settings.bhsl
+        if running: risk += risk_settings.rp_bhsl
+    if shot_id==11:
+        risk += risk_settings.smash
+        if running: risk += risk_settings.rp_smash
+    if shot_id==12:
+        risk += risk_settings.tweener
+        if running: risk += risk_settings.rp_tweener
+        
+    return risk
+    
+def shot_direction(start,end):
+    """
+    returns one of intenums DTL(0),CCL(1),CCLX(2),CCR(3),CCRX(4);
+    always looking at court from perspective of bottom half player
+    """
+    
+    if end[1] < start[1]-4:
+        return 2
+    elif end[1] < start[1]-1:
+        return 1
+    elif end[1] < start[1]+2:
+        return 0
+    elif end[1] < start[1]+5:
+        return 3
+    else:
+        return 4
+    
+def sigmoid(x):
+    return 1/(1+math.exp(-x))
     
 def time_to_pt(player,pt):
     """
@@ -323,4 +428,13 @@ def time_to_pt(player,pt):
     
     t = distance_between(pt,player.pos)/player.speed
     t += movement_readjust_penalty(player,pt)
+    return t
+
+def time_to_x(k,c_d,v0,x):
+    """
+    returns time taken for ball to travel horizontal distance x
+    given initial pace v0
+    """
+    
+    t = (math.exp(k*c_d*x)-1)/(k*c_d*v0)
     return t

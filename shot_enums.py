@@ -21,3 +21,10 @@ class Window(IntEnum):
     # OHV = 6 # overhead volley
     # OHHV = 7 # overhead half-volley
     # OHGS = 8 # overhead ground stroke
+    
+class Direction(IntEnum):
+    DTL = 0 # down the line
+    CCL = 1 # cross court to the left
+    CCLX = 2 # cross court to the extreme left
+    CCR = 3 # cross court to the right
+    CCRX = 4 # cross court to the extreme right

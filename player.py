@@ -6,6 +6,7 @@ class Player():
     def __init__(self,player_settings,tile_dim,court_half,hand=DH.RIGHT):
         self.hand = hand
         self.half = court_half # only where they start as perspective flips
+        # NOTE COURT HALF IS NOT USED ANYMORE, TO BE CLEANED UP AT LATER DATE
         self.speed = player_settings.speed/tile_dim.length
         self.reaction_time = player_settings.reaction_time
         self.halting_time = player_settings.halting_time
@@ -25,6 +26,7 @@ class Player():
         self.middle_shots = []
         self.right_shots = []
         self.shots = [self.left_shots,self.middle_shots,self.right_shots]
+        self.serves = []
     
     """
     def get_movement_state(self):
